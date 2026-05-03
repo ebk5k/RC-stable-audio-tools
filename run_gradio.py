@@ -1,8 +1,18 @@
+import os
+
+os.environ.setdefault("MPLCONFIGDIR", os.path.abspath(".cache/matplotlib"))
+os.environ.setdefault("HF_HOME", os.path.abspath(".cache/huggingface"))
+os.environ.setdefault("TRANSFORMERS_CACHE", os.path.abspath(".cache/huggingface/transformers"))
+os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
+os.makedirs(os.environ["HF_HOME"], exist_ok=True)
+os.makedirs(os.environ["TRANSFORMERS_CACHE"], exist_ok=True)
+
 from stable_audio_tools import get_pretrained_model
 from stable_audio_tools.interface.gradio import create_ui
 import json 
 
 import torch
+import gradio.networking
 
 def main(args):
     torch.manual_seed(42)
@@ -16,6 +26,7 @@ def main(args):
         gradio_title=args.title
     )
     interface.queue()
+    gradio.networking.url_ok = lambda _: True
     interface.launch(share=args.share, auth=(args.username, args.password) if args.username is not None else None)
 
 if __name__ == "__main__":

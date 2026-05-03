@@ -8,7 +8,6 @@ import json
 import torch
 import torchaudio
 import random
-import hffs
 import math
 import re
 
@@ -19,6 +18,7 @@ from einops import rearrange
 from safetensors.torch import load_file
 from torch.nn import functional as F
 from torchaudio import transforms as T
+from huggingface_hub import snapshot_download
 
 
 from ..inference.generation import generate_diffusion_cond, generate_diffusion_uncond
@@ -88,6 +88,54 @@ current_prompt_generator = master_prompt_map.default_prompt_generator
 
 # Ensure the output directory exists
 os.makedirs(output_directory, exist_ok=True)
+
+def list_downloaded_models(local_dir):
+    if not os.path.isdir(local_dir):
+        return []
+    return [[item] for item in os.listdir(local_dir) if os.path.isdir(os.path.join(local_dir, item))]
+
+def make_model_download_fn(local_dir):
+    def download_model(model_id, progress=gr.Progress()):
+        if not model_id:
+            return list_downloaded_models(local_dir)
+
+        model_dir = os.path.join(local_dir, "-".join(model_id.split("/")))
+        os.makedirs(local_dir, exist_ok=True)
+        snapshot_download(repo_id=model_id, local_dir=model_dir)
+        return list_downloaded_models(local_dir)
+
+    return download_model
+
+def create_model_downloader_ui():
+    for item in config.get('hffs', []):
+        choices = item.get('options', [])
+        local_dir = os.path.join(os.getcwd(), item.get('path', config['models_directory']))
+        os.makedirs(local_dir, exist_ok=True)
+
+        with gr.Tab(item.get('path', 'models')):
+            with gr.Row():
+                model_dropdown = gr.Dropdown(
+                    label="HuggingFace ID",
+                    choices=choices,
+                    allow_custom_value=True,
+                    value=choices[0] if choices else None,
+                )
+                download_button = gr.Button("Download")
+            downloaded_models = gr.Dataframe(
+                value=list_downloaded_models(local_dir),
+                headers=["name"],
+                datatype=["str"],
+            )
+            download_button.click(
+                fn=make_model_download_fn(local_dir),
+                inputs=[model_dropdown],
+                outputs=[downloaded_models],
+            )
+
+def safe_output_stem(text):
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", text.strip())
+    stem = re.sub(r"_+", "_", stem).strip("._")
+    return stem[:180] or "generation"
 
 def pick_preferred_dtype(device: torch.device) -> torch.dtype:
     """
@@ -267,10 +315,16 @@ def load_model(model_config=None, model_ckpt_path=None, pretrained_name=None,
         tensors = [v for v in state_dict.values() if torch.is_tensor(v)]
         is_fp16 = (len(tensors) > 0) and all(t.dtype == torch.float16 for t in tensors)
 
-        if is_fp16:
+        supports_half = device is not None and device.type in ("cuda", "mps")
+
+        if is_fp16 and supports_half:
             print("Model is in float16 format. Enabling half-precision inference.")
             global_model_half = True
             model.to(torch.float16)
+        elif is_fp16:
+            print("Model checkpoint is float16, but CPU inference requires float32. Converting model to full precision.")
+            global_model_half = False
+            model.to(torch.float32)
         else:
             print("Model is in full precision format.")
             global_model_half = False
@@ -294,9 +348,14 @@ def load_model(model_config=None, model_ckpt_path=None, pretrained_name=None,
         pt_tensors = [v for v in pretransform_state_dict.values() if torch.is_tensor(v)]
         is_float16_pretransform = (len(pt_tensors) > 0) and all(t.dtype == torch.float16 for t in pt_tensors)
                 
-        if is_float16_pretransform:
+        supports_half = device is not None and device.type in ("cuda", "mps")
+
+        if is_float16_pretransform and supports_half:
             print("Model is in float16 format. Enabling half-precision inference.")
             model.pretransform.to(torch.float16)  # Convert the pretransform model to half precision before loading state dict
+        elif is_float16_pretransform:
+            print("Pretransform checkpoint is float16, but CPU inference requires float32.")
+            model.pretransform.to(torch.float32)
         else:
             print("Model is in full precision format.")
         
@@ -313,6 +372,7 @@ def load_model(model_config=None, model_ckpt_path=None, pretrained_name=None,
             # treat bf16 as "half" for your global flag
             global_model_half = preferred_dtype in (torch.float16, torch.bfloat16)
         else:
+            model.to(torch.float32)
             global_model_half = False
 
     print(f"Done loading model")
@@ -574,7 +634,7 @@ def generate_cond(
             counter += 1
         return file_path
 
-    base_name = amended_prompt.replace(" ", "_").replace(",", "").replace(":", "").replace(";", "")
+    base_name = safe_output_stem(amended_prompt)
     file_path = get_unique_filename(base_name, seed, output_directory)
 
     torchaudio.save(file_path, wav_i16, sample_rate)
@@ -922,7 +982,7 @@ def create_sampling_ui(model_config, initial_ckpt, inpainting=False):
 
         with gr.Column():
             midi_piano_roll_output = gr.Image(label="MIDI Piano Roll", interactive=False)
-            midi_download_button = gr.File(label="Download MIDI", file_count="single", type="filepath", interactive=False)
+            midi_download_button = gr.File(label="Download MIDI", file_count="single", interactive=False)
             audio_spectrogram_output = gr.Gallery(label="Output spectrogram", show_label=False)
 
     # IMPORTANT: int4_checkbox exists only if TORCHAO_INT4_SUPPORTED.
@@ -1136,7 +1196,7 @@ def create_txt2audio_ui(model_config, initial_ckpt):
             create_sampling_ui(model_config, initial_ckpt)
         with gr.Tab("Download Models"):
             gr.HTML("<h2>Download</h2><div>Download a model and restart the app to apply.</div>")
-            hffs.from_config(config)
+            create_model_downloader_ui()
     return ui
 
 def create_diffusion_uncond_ui(model_config):
@@ -1311,7 +1371,7 @@ def create_ui(
             print("no default checkpoint.")
             with gr.Blocks() as ui:
                 gr.HTML("<h2>Initialize</h2><div>Download a model first, and restart the app.</div>")
-                hffs.from_config(config)
+                create_model_downloader_ui()
             return ui
 
     # Exactly one of: pretrained_name OR (model_config_path + ckpt_path)

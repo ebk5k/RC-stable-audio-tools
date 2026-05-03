@@ -124,6 +124,8 @@ celerybeat.pid
 .venv
 env/
 venv/
+stable-audio/
+stable-audio.previous/
 ENV/
 env.bak/
 venv.bak/
@@ -166,6 +168,7 @@ wandb/*
 *.safetensors
 *.png
 *.mp3
+.DS_Store
 
 # --- keep folder, ignore anything else other than explainers ---
 generations/*
@@ -175,4 +178,4 @@ models/*
 !models/*.txt
 
 venv_upstream_style/
-
+RC-stable-audio-tools/
