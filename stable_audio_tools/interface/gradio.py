@@ -32,7 +32,12 @@ from .prompts import master_prompt_map
 import pretty_midi
 import matplotlib.pyplot as plt
 import librosa.display
-from basic_pitch.inference import predict_and_save, ICASSP_2022_MODEL_PATH
+try:
+    from basic_pitch.inference import predict_and_save, ICASSP_2022_MODEL_PATH
+except Exception as e:
+    print(f"basic_pitch import failed; MIDI conversion will be disabled: {e}")
+    predict_and_save = None
+    ICASSP_2022_MODEL_PATH = None
 
 # Load config file
 with open("config.json") as config_file:
@@ -419,6 +424,9 @@ def amend_prompt(prompt, note, scale, bars, bpm):
     return f"{prompt}, {note} {scale}, {bars} bars, {bpm}BPM,"
 
 def convert_audio_to_midi(audio_path, output_dir):
+    if predict_and_save is None or ICASSP_2022_MODEL_PATH is None:
+        raise RuntimeError("basic_pitch is not available in this environment")
+
     predict_and_save(
         [audio_path],
         output_directory=output_dir,
