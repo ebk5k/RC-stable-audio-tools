@@ -54,4 +54,7 @@ tqdm>=4.65.0,<5
 importlib-resources>=5.12.0,<7
 
 basic-pitch>=0.3.0,<0.5
+onnxruntime>=1.18,<1.21
+mir-eval>=0.8,<0.9
+resampy==0.4.2
 hffs>=0.1.0

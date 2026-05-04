@@ -43,6 +43,40 @@
 
 ## 🚀 Installation
 
+### ☁️ Colab / Cloud GPU Quick Start
+
+Use this path when you want the app to survive Colab resets with the fewest manual steps.
+
+1. In Colab, choose **Runtime > Change runtime type > T4 GPU**.
+2. Open the Colab terminal and run:
+
+```bash
+cd /content
+rm -rf RC-stable-audio-tools
+git clone -b codex-cloud-gpu-ready https://github.com/ebk5k/RC-stable-audio-tools.git
+cd RC-stable-audio-tools
+bash scripts/colab_bootstrap.sh --launch
+```
+
+The script installs the cloud dependency set, adds the Basic Pitch ONNX MIDI backend, downloads Foundation-1, and starts Gradio with `--share`.
+
+Success looks like:
+
+```text
+CUDA available: True
+GPU: Tesla T4
+Running on public URL: https://xxxxx.gradio.live
+```
+
+If Colab disconnects but the runtime is still alive:
+
+```bash
+cd /content/RC-stable-audio-tools
+python run_gradio.py --share
+```
+
+If `/content/RC-stable-audio-tools` is missing, Colab reset the runtime. Run the quick-start block again.
+
 ### 📥 Clone the Repository
 
 First, clone the repository to your local machine:
