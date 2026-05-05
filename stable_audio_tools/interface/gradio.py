@@ -374,6 +374,10 @@ def load_model(model_config=None, model_ckpt_path=None, pretrained_name=None,
     if preferred_dtype is not None and device is not None:
         if device.type in ("cuda", "mps"):
             model.to(preferred_dtype)
+            # SnakeBeta decoder: exp(alpha) overflows float16 → NaN audio.
+            # Keep the VAE pretransform in float32 regardless of backbone dtype.
+            if model.pretransform is not None:
+                model.pretransform.to(torch.float32)
             # treat bf16 as "half" for your global flag
             global_model_half = preferred_dtype in (torch.float16, torch.bfloat16)
         else:
