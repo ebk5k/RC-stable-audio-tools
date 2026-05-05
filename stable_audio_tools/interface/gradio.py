@@ -616,9 +616,12 @@ def generate_cond(
 
     # ---------- tensor trim (sample-exact) + short fade ----------
     audio = rearrange(audio, "b d n -> d (b n)")  # [ch, n] or [d, n]
-    print(f"[SAVE1] after rearrange  min={audio.min():.4f} max={audio.max():.4f} dtype={audio.dtype}")
-    audio = audio.to(torch.float32).clamp(-1, 1)
-    print(f"[SAVE2] after clamp      min={audio.min():.4f} max={audio.max():.4f}")
+    audio = audio.to(torch.float32)
+    # Peak-normalize if the signal exceeds ±1 to prevent hard clipping distortion.
+    peak = audio.abs().max().clamp(min=1e-8)
+    if peak > 1.0:
+        audio = audio / peak
+    audio = audio.clamp(-1, 1)
 
     # trim to deterministic grid length
     end = min(int(audio.shape[-1]), int(clip_samples))
@@ -633,7 +636,6 @@ def generate_cond(
         audio[:, -fade_len:] *= ramp
 
     wav_i16 = (audio * 32767.0).to(torch.int16).cpu()
-    print(f"[SAVE3] wav_i16          min={wav_i16.min():.0f} max={wav_i16.max():.0f}")
 
     # Create spectrogram BEFORE returning (spectrogram function expects int16)
     audio_spectrogram = audio_spectrogram_image(wav_i16, sample_rate=sample_rate)

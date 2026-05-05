@@ -244,11 +244,7 @@ def generate_diffusion_cond(
     if model.pretransform is not None and not return_latents:
         #cast sampled latents to pretransform dtype
         sampled = sampled.to(next(model.pretransform.parameters()).dtype)
-        _l = sampled
-        print(f"[DIAG] latents  dtype={_l.dtype} shape={tuple(_l.shape)} min={_l.min().item():.4f} max={_l.max().item():.4f} nan={torch.isnan(_l).any().item()} inf={torch.isinf(_l).any().item()}")
         sampled = model.pretransform.decode(sampled)
-        _a = sampled
-        print(f"[DIAG] decoded  dtype={_a.dtype} shape={tuple(_a.shape)} min={_a.min().item():.4f} max={_a.max().item():.4f} nan={torch.isnan(_a).any().item()} inf={torch.isinf(_a).any().item()}")
 
     # Return audio
     return sampled
