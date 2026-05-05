@@ -174,7 +174,7 @@ def sample_k(
         x = noise
 
 
-    with torch.cuda.amp.autocast():
+    with torch.amp.autocast('cuda', enabled=False):
         if sampler_type == "k-heun":
             return K.sampling.sample_heun(denoiser, x, sigmas, disable=False, callback=wrapped_callback, extra_args=extra_args)
         elif sampler_type == "k-lms":

@@ -143,19 +143,9 @@ def safe_output_stem(text):
     return stem[:180] or "generation"
 
 def pick_preferred_dtype(device: torch.device) -> torch.dtype:
-    """
-    User-facing policy:
-      - CUDA: bf16 if supported else fp16
-      - MPS: fp16
-      - CPU: fp32
-    """
-    if device.type == "cuda":
-        try:
-            return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-        except Exception:
-            return torch.float16
-    if device.type == "mps":
-        return torch.float16
+    # Always use float32 for inference. The Foundation-1 safetensors is 2.43 GB
+    # (fp16 weights = ~4.9 GB in fp32), which fits in the T4's 16 GB. Running
+    # fp16 on the T4 causes AdaLN overflow and distorted audio; fp32 is correct.
     return torch.float32
 
 
