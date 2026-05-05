@@ -617,10 +617,12 @@ def generate_cond(
     # ---------- tensor trim (sample-exact) + short fade ----------
     audio = rearrange(audio, "b d n -> d (b n)")  # [ch, n] or [d, n]
     audio = audio.to(torch.float32)
-    # Peak-normalize if the signal exceeds ±1 to prevent hard clipping distortion.
+    # Normalize to -6 dBFS peak (0.5) — standard level for production samples/loops.
+    # Only normalizes downward so quiet sounds are never amplified.
+    TARGET_PEAK = 0.5
     peak = audio.abs().max().clamp(min=1e-8)
-    if peak > 1.0:
-        audio = audio / peak
+    if peak > TARGET_PEAK:
+        audio = audio / peak * TARGET_PEAK
     audio = audio.clamp(-1, 1)
 
     # trim to deterministic grid length
