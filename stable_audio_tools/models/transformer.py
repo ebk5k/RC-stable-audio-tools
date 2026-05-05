@@ -656,16 +656,20 @@ class TransformerBlock(nn.Module):
         rotary_pos_emb = None
     ):
         if self.global_cond_dim is not None and self.global_cond_dim > 0 and global_cond is not None:
-            
-            scale_self, shift_self, gate_self, scale_ff, shift_ff, gate_ff = self.to_scale_shift_gate(global_cond).unsqueeze(1).chunk(6, dim = -1)
+
+            # Compute AdaLN params in float32 — large scale/shift values overflow float16
+            # on GPU inference, turning residuals to Inf and producing clipped audio.
+            with torch.cuda.amp.autocast(enabled=False):
+                adaLN = self.to_scale_shift_gate(global_cond.float()).unsqueeze(1)
+            scale_self, shift_self, gate_self, scale_ff, shift_ff, gate_ff = adaLN.chunk(6, dim=-1)
 
             # self-attention with adaLN
             residual = x
             x = self.pre_norm(x)
-            x = x * (1 + scale_self) + shift_self
-            x = self.self_attn(x, mask = mask, rotary_pos_emb = rotary_pos_emb)
-            x = x * torch.sigmoid(1 - gate_self)
-            x = x + residual
+            x = x.float() * (1 + scale_self) + shift_self
+            x = self.self_attn(x.to(residual.dtype), mask = mask, rotary_pos_emb = rotary_pos_emb)
+            x = x.float() * torch.sigmoid(1 - gate_self)
+            x = x.to(residual.dtype) + residual
 
             if context is not None:
                 x = x + self.cross_attn(self.cross_attend_norm(x), context = context, context_mask = context_mask)
@@ -676,10 +680,10 @@ class TransformerBlock(nn.Module):
             # feedforward with adaLN
             residual = x
             x = self.ff_norm(x)
-            x = x * (1 + scale_ff) + shift_ff
-            x = self.ff(x)
-            x = x * torch.sigmoid(1 - gate_ff)
-            x = x + residual
+            x = x.float() * (1 + scale_ff) + shift_ff
+            x = self.ff(x.to(residual.dtype))
+            x = x.float() * torch.sigmoid(1 - gate_ff)
+            x = x.to(residual.dtype) + residual
 
         else:
             x = x + self.self_attn(self.pre_norm(x), mask = mask, rotary_pos_emb = rotary_pos_emb)
