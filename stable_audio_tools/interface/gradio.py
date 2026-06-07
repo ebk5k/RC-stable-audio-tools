@@ -942,7 +942,7 @@ def create_sampling_ui(model_config, initial_ckpt, inpainting=False):
 
             lock_bpm_checkbox = gr.Checkbox(label="Lock BPM Settings", value=True)
             with gr.Row(visible=has_seconds_start or has_seconds_total):
-                bars_dropdown = gr.Dropdown([4, 8], label="Bars", value=8, visible=has_seconds_total)
+                bars_dropdown = gr.Dropdown([4, 8, 16], label="Bars", value=8, visible=has_seconds_total)
                 bpm_dropdown = gr.Dropdown([100, 110, 120, 128, 130, 140, 150],
                                            label="BPM", value=128, visible=has_seconds_total)
 
@@ -1134,7 +1134,7 @@ def create_sampling_ui(model_config, initial_ckpt, inpainting=False):
             new_prompt = current_prompt_generator()  
 
         if not lock_bpm:
-            bars = random.choice([4, 8])
+            bars = random.choice([4, 8, 16])
             bpm = random.choice([100, 110, 120, 128, 130, 140, 150])
 
         if not lock_key:
