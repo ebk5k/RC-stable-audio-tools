@@ -414,6 +414,25 @@ def target_samples_for_generation(clip_samples: int, sample_rate: int, min_input
 
     return seconds_total_int, target_samples
 
+def print_audio_health(label, audio):
+    try:
+        audio_f = audio.detach().to(torch.float32)
+        total = max(int(audio_f.numel()), 1)
+        finite = torch.isfinite(audio_f)
+        nonfinite = int((~finite).sum().item())
+        finite_audio = audio_f[finite] if finite.any() else torch.zeros(1, device=audio_f.device)
+        abs_audio = finite_audio.abs()
+        clipped = int((abs_audio >= 0.999).sum().item())
+        peak = float(abs_audio.max().item())
+        rms = float(torch.sqrt(torch.mean(finite_audio.square())).item())
+        print(
+            f"[audio-health] {label}: "
+            f"shape={tuple(audio_f.shape)} nonfinite={nonfinite} "
+            f"peak={peak:.6g} rms={rms:.6g} clipped_pct={(clipped / total) * 100:.4f}"
+        )
+    except Exception as e:
+        print(f"[audio-health] {label}: failed to inspect tensor: {e}")
+
 def amend_prompt(prompt, note, scale, bars, bpm):
     return f"{prompt}, {note} {scale}, {bars} bars, {bpm}BPM,"
 
@@ -607,6 +626,12 @@ def generate_cond(
     # ---------- tensor trim (sample-exact) + short fade ----------
     audio = rearrange(audio, "b d n -> d (b n)")  # [ch, n] or [d, n]
     audio = audio.to(torch.float32)
+    print_audio_health("raw decoded", audio)
+
+    if not torch.isfinite(audio).all():
+        print("[audio-health] raw decoded contains NaN/Inf; replacing non-finite values with silence before save")
+        audio = torch.nan_to_num(audio, nan=0.0, posinf=0.0, neginf=0.0)
+
     # Normalize to -6 dBFS peak (0.5) — standard level for production samples/loops.
     # Only normalizes downward so quiet sounds are never amplified.
     TARGET_PEAK = 0.5
@@ -614,6 +639,7 @@ def generate_cond(
     if peak > TARGET_PEAK:
         audio = audio / peak * TARGET_PEAK
     audio = audio.clamp(-1, 1)
+    print_audio_health("after peak normalize", audio)
 
     # trim to deterministic grid length
     end = min(int(audio.shape[-1]), int(clip_samples))
@@ -628,6 +654,7 @@ def generate_cond(
         audio[:, -fade_len:] *= ramp
 
     wav_i16 = (audio * 32767.0).to(torch.int16).cpu()
+    print_audio_health("saved int16 tensor", wav_i16.float().div(32767.0))
 
     # Create spectrogram BEFORE returning (spectrogram function expects int16)
     audio_spectrogram = audio_spectrogram_image(wav_i16, sample_rate=sample_rate)

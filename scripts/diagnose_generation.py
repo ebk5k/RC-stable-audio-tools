@@ -21,8 +21,8 @@ from stable_audio_tools.interface import gradio as ui
 
 
 DEFAULT_PROMPT = (
-    "clean monophonic analog synth lead, simple memorable melody, dry signal, "
-    "no distortion, no drums, no bass, clear note attacks"
+    "Synth Lead, Analog Synth, Warm, Clean, Focused, Simple Melody, Catchy, "
+    "Low Reverb"
 )
 
 
@@ -88,7 +88,7 @@ def main() -> None:
     parser.add_argument("--model-config", help="Model config JSON. Defaults to first downloaded model.")
     parser.add_argument("--ckpt-path", help="Checkpoint path. Defaults to first downloaded model.")
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
-    parser.add_argument("--negative-prompt", default="distortion, clipping, noise, drums, bass, chords")
+    parser.add_argument("--negative-prompt", default="")
     parser.add_argument("--bars", type=int, default=8)
     parser.add_argument("--bpm", type=int, default=128)
     parser.add_argument("--note", default="F")
