@@ -653,8 +653,9 @@ def generate_cond(
         ramp = torch.linspace(1.0, 0.0, steps=fade_len, device=audio.device, dtype=audio.dtype)
         audio[:, -fade_len:] *= ramp
 
+    audio_to_save = audio.detach().cpu()
     wav_i16 = (audio * 32767.0).to(torch.int16).cpu()
-    print_audio_health("saved int16 tensor", wav_i16.float().div(32767.0))
+    print_audio_health("saved int16 preview", wav_i16.float().div(32767.0))
 
     # Create spectrogram BEFORE returning (spectrogram function expects int16)
     audio_spectrogram = audio_spectrogram_image(wav_i16, sample_rate=sample_rate)
@@ -673,7 +674,16 @@ def generate_cond(
     base_name = safe_output_stem(amended_prompt)
     file_path = get_unique_filename(base_name, seed, output_directory)
 
-    torchaudio.save(file_path, wav_i16, sample_rate)
+    # Save float audio in [-1, 1] and ask torchaudio to encode it as PCM.
+    # Passing an int16 tensor directly is backend/version-sensitive and caused
+    # Colab torchaudio 2.11 to clamp nearly every sample to full scale.
+    torchaudio.save(file_path, audio_to_save, sample_rate, encoding="PCM_S", bits_per_sample=16)
+    try:
+        saved_audio, saved_sr = torchaudio.load(file_path)
+        print(f"[audio-health] saved wav sample_rate={saved_sr}")
+        print_audio_health("saved wav readback", saved_audio)
+    except Exception as e:
+        print(f"[audio-health] saved wav readback failed: {e}")
 
     # ---------- MIDI conversion ----------
     try:
